@@ -29,4 +29,6 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
 
     // Find pending/in-progress requests scheduled for a specific time or later
     List<ServiceRequest> findByScheduledTimeAfterAndStatusNot(LocalDateTime time, ServiceRequest.RequestStatus status);
+    
+    List<ServiceRequest> findByRoom_RoomId(Long roomId); 
 }

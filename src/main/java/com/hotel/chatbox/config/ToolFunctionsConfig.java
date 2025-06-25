@@ -32,7 +32,7 @@ import java.util.function.Function;
 
 // Import all your request records from the new common location
 //import com.hotel.chatbox.model.requests.ToolRequests.RoomBookingRequest;
-import com.hotel.chatbox.model.requests.ToolRequests.RoomServiceRequest;
+//import com.hotel.chatbox.model.requests.ToolRequests.RoomServiceRequest;
 import com.hotel.chatbox.model.requests.ToolRequests.HousekeepingRequest;
 import com.hotel.chatbox.model.requests.ToolRequests.SpaReservationRequest;
 import com.hotel.chatbox.model.requests.ToolRequests.GymReservationRequest;
@@ -65,100 +65,40 @@ public class ToolFunctionsConfig {
         this.stayRepository = stayRepository;
         this.serviceRequestService = serviceRequestService;
     }
-
-    // You can uncomment and move your bookRoom bean here if you decide to re-enable it.
-    /*
-    @Bean(name = "bookRoom")
-    @Transactional
-    public Function<RoomBookingRequest, String> bookRoom() {
-        return request -> {
-            try {
-                System.out.println("DEBUG: bookRoom called with roomType=" + request.roomType() +
-                                   ", checkInDate=" + request.checkInDate() +
-                                   ", checkOutDate=" + request.checkOutDate() +
-                                   ", numberOfGuests=" + request.numberOfGuests());
-
-                User currentUser = userRepository.findByUsername("user").orElse(null);
-                if (currentUser == null) {
-                    System.err.println("ERROR: User 'user' not found for room booking. Ensure a user with username 'user' exists in the database.");
-                    return "I cannot make a room reservation without identifying you. Please ensure you are logged in.";
-                }
-                System.out.println("DEBUG: Current user found: " + currentUser.getUsername() + " (ID: " + currentUser.getId() + ")");
-
-                LocalDate parsedCheckInDate = LocalDate.parse(request.checkInDate(), DateTimeFormatter.ISO_LOCAL_DATE);
-                LocalDate parsedCheckOutDate = LocalDate.parse(request.checkOutDate(), DateTimeFormatter.ISO_LOCAL_DATE);
-
-                if (parsedCheckInDate.isAfter(parsedCheckOutDate) || parsedCheckInDate.isBefore(LocalDate.now())) {
-                    return "The check-in or check-out date is invalid. Please ensure check-in is today or later, and check-out is after check-in.";
-                }
-
-                boolean isRoomAvailable = true; // Placeholder for actual room availability check logic
-                if (!isRoomAvailable) {
-                    return "Unfortunately, " + request.roomType() + " rooms are not available for your selected dates. Please try different dates or room types.";
-                }
-
-                RoomReservation reservation = new RoomReservation(
-                    currentUser,
-                    request.roomType(),
-                    parsedCheckInDate,
-                    parsedCheckOutDate,
-                    request.numberOfGuests()
-                );
-                reservation.setStatus(RoomReservation.RoomReservationStatus.CONFIRMED);
-
-                System.out.println("DEBUG: Attempting to save room reservation: " + reservation.toString());
-                roomReservationRepository.save(reservation);
-                System.out.println("DEBUG: Room reservation save operation completed. New ID (if generated): " + reservation.getReservationId());
-
-                return "Your " + request.roomType() + " room reservation for " + request.numberOfGuests() +
-                       " guests from " + request.checkInDate() + " to " + request.checkOutDate() +
-                       " has been confirmed. Confirmation ID: " + reservation.getReservationId() + ".";
-            } catch (DateTimeParseException e) {
-                System.err.println("ERROR: DateTimeParseException for room booking dates: " + e.getMessage());
-                return "I couldn't understand the date format for your room reservation. Please provide dates in YYYY-MM-DD format.";
-            } catch (Exception e) {
-                System.err.println("CRITICAL ERROR: Exception caught during room booking: " + e.getMessage());
-                e.printStackTrace();
-                return "I apologize, but I encountered an issue while trying to book your room. Please try again later.";
-            }
-        };
-    }
-    */
     
-//    @Bean(name = "createRoomServiceReservation")
+//    @Bean(name = "scheduleHousekeeping")
 //    @Transactional // Keep transactional here as the service method is also transactional
-//    public Function<RoomServiceRequest, String> createRoomServiceReservation() {
+//    public Function<HousekeepingRequest, String> scheduleHousekeeping() {
 //        return request -> {
 //            try {
-//                System.out.println("DEBUG: createRoomServiceReservation called with time=" + request.time() + ", items=" + request.items() + ", roomNumber=" + request.room_id() + "request_id=" + request.stay_id());
+//                System.out.println("DEBUG: scheduleHousekeeping called with time=" + request.time() + ", roomNumber=" + request.room_id() + "request_id=" + request.stay_id());
 //
 //                // For a real application, userId should come from the authenticated user context.
 //                // For this example, we'll assume a default user or fetch it if needed.
 //                User currentUser = userRepository.findByUsername("user").orElse(null);
 //                if (currentUser == null) {
-//                    System.err.println("ERROR: User 'user' not found for room service. Ensure a user with username 'user' exists in the database.");
-//                    return "I cannot place a room service request without identifying you. Please ensure you are logged in.";
+//                    System.err.println("ERROR: User 'user' not found for housekeeping service. Ensure a user with username 'user' exists in the database.");
+//                    return "I cannot place a housekeeping request without identifying you. Please ensure you are logged in.";
 //                }
 //
 //                // Call the new service method
-//                ServiceRequest newServiceRequest = serviceRequestService.createRoomServiceRequest(
+//                ServiceRequest newServiceRequest = serviceRequestService.scheduleHousekeeping(
 //                    currentUser.getId(),
 //                    request.room_id(),
-//                    request.items(),
-//                    request.time(), // Pass the time string directly for parsing in service
-//                    request.stay_id() // For now, we'll let the service try to find an active stay or keep it null
+//                    request.time(), 
+//                    request.stay_id()
 //                );
 //
-//                return "Your room service request for " + request.items() + " at " + request.time() +
+//                return "Your room housekeeping request at " + request.time() +
 //                       " for room " + request.room_id() + " has been placed. Request ID: " + newServiceRequest.getRequestId() + ".";
 //
 //            } catch (IllegalArgumentException e) {
-//                System.err.println("ERROR: Error creating room service request: " + e.getMessage());
-//                return "I apologize, but I couldn't process your room service request: " + e.getMessage();
+//                System.err.println("ERROR: Error creating housekeeping request: " + e.getMessage());
+//                return "I apologize, but I couldn't process your housekeeping request: " + e.getMessage();
 //            } catch (Exception e) {
-//                System.err.println("CRITICAL ERROR: Exception caught during createRoomServiceReservation. Full stack trace below:");
+//                System.err.println("CRITICAL ERROR: Exception caught during scheduleHousekeeping. Full stack trace below:");
 //                e.printStackTrace();
-//                return "I apologize, but I encountered an unexpected issue while trying to place your room service request. Please try again later.";
+//                return "I apologize, but I encountered an unexpected issue while trying to place your housekeeping request. Please try again later.";
 //            }
 //        };
 //    }

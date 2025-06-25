@@ -6,7 +6,7 @@ import com.hotel.chatbox.domain.ServiceRequest;
 import com.hotel.chatbox.domain.Stay;
 import com.hotel.chatbox.domain.User;
 import com.hotel.chatbox.repository.ServiceRequestRepository;
-import com.hotel.chatbox.repository.RoomRepository;
+import com.hotel.chatbox.repository.RoomRepository; // Keep this import to fetch Room by ID
 import com.hotel.chatbox.repository.UserRepository;
 import com.hotel.chatbox.repository.StayRepository;
 import org.springframework.stereotype.Service;
@@ -23,16 +23,16 @@ public class ServiceRequestService {
 
     private final ServiceRequestRepository serviceRequestRepository;
     private final UserRepository userRepository;
-    private final RoomRepository roomRepository;
+    private final RoomRepository roomRepository; // Still needed to fetch Room object by ID
     private final StayRepository stayRepository;
 
     public ServiceRequestService(ServiceRequestRepository serviceRequestRepository,
                                  UserRepository userRepository,
-                                 RoomRepository roomRepository,
+                                 RoomRepository roomRepository, // Keep this in constructor
                                  StayRepository stayRepository) {
         this.serviceRequestRepository = serviceRequestRepository;
         this.userRepository = userRepository;
-        this.roomRepository = roomRepository;
+        this.roomRepository = roomRepository; // Initialize it
         this.stayRepository = stayRepository;
     }
 
@@ -40,7 +40,7 @@ public class ServiceRequestService {
      * Creates and saves a new service request.
      *
      * @param userId The ID of the user making the request.
-     * @param roomNumber The room number for which the service is requested.
+     * @param roomId The ID of the room for which the service is requested.
      * @param requestType The type of service request (e.g., ROOM_SERVICE, HOUSEKEEPING).
      * @param description A detailed description of the request.
      * @param scheduledTime Optional time for the service to be scheduled (can be null for immediate).
@@ -49,7 +49,7 @@ public class ServiceRequestService {
      * @throws IllegalArgumentException if user or room is not found.
      */
     @Transactional
-    public ServiceRequest createServiceRequest(Long userId, String roomNumber,
+    public ServiceRequest createServiceRequest(Long userId, Long roomId, 
                                                ServiceRequest.RequestType requestType,
                                                String description,
                                                LocalDateTime scheduledTime,
@@ -57,8 +57,9 @@ public class ServiceRequestService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User with ID " + userId + " not found."));
 
-        Room room = roomRepository.findByRoomNumber(roomNumber)
-                .orElseThrow(() -> new IllegalArgumentException("Room with number " + roomNumber + " not found."));
+        // Fetch Room by roomId
+        Room room = roomRepository.findById(roomId) // Changed from findByRoomNumber
+                .orElseThrow(() -> new IllegalArgumentException("Room with ID " + roomId + " not found."));
 
         Stay stay = null;
         if (stayId != null) {
@@ -67,24 +68,24 @@ public class ServiceRequestService {
             // Optional: You might want to add a check here to ensure the stay is active and belongs to the user/room.
             // Example: if (!stay.getUser().getId().equals(userId) || !stay.getRoom().getRoomId().equals(room.getRoomId())) { ... }
         } else {
-             // If no stayId is provided, try to find an active stay for the user in that room
-             stay = stayRepository.findByUserAndRoomAndStayStatus(user, room, Stay.StayStatus.IN_PROGRESS)
-                         .orElse(null); // Assign null if no active stay is found
-             if (stay == null) {
-                 System.out.println("No active stay found for user " + userId + " in room " + roomNumber + ". Request will be processed without a linked stay.");
-             }
+            // If no stayId is provided, try to find an active stay for the user in that room
+            // Note: This logic might be redundant if ChatService always provides stayId/roomId based on active stay
+            stay = stayRepository.findByUserAndRoomAndStayStatus(user, room, Stay.StayStatus.IN_PROGRESS)
+                        .orElse(null); // Assign null if no active stay is found
+            if (stay == null) {
+                System.out.println("No active stay found for user " + userId + " in room ID " + roomId + ". Request will be processed without a linked stay.");
+            }
         }
-
 
         ServiceRequest serviceRequest = new ServiceRequest();
         serviceRequest.setUser(user);
         serviceRequest.setRoom(room);
-        serviceRequest.setStay(stay); // Set stay, can be null
+        serviceRequest.setStay(stay); 
         serviceRequest.setType(requestType);
         serviceRequest.setDescription(description);
         serviceRequest.setRequestTime(LocalDateTime.now());
-        serviceRequest.setScheduledTime(scheduledTime); // Can be null
-        serviceRequest.setStatus(ServiceRequest.RequestStatus.PENDING); // Initial status
+        serviceRequest.setScheduledTime(scheduledTime); 
+        serviceRequest.setStatus(ServiceRequest.RequestStatus.PENDING);
 
         return serviceRequestRepository.save(serviceRequest);
     }
@@ -93,7 +94,7 @@ public class ServiceRequestService {
      * Creates and saves a new Room Service request.
      *
      * @param userId The ID of the user making the request.
-     * @param roomNumber The room number for which the service is requested.
+     * @param roomId The ID of the room for which the service is requested. // Changed from roomNumber
      * @param items The specific items requested for room service.
      * @param scheduledTimeStr The scheduled time for the service in HH:MM format.
      * @param stayId Optional ID of the active stay associated with the request (can be null).
@@ -101,25 +102,64 @@ public class ServiceRequestService {
      * @throws IllegalArgumentException if user or room is not found, or time format is invalid.
      */
     @Transactional
-    public ServiceRequest createRoomServiceRequest(Long userId, String roomNumber, String items, String scheduledTimeStr, Long stayId) {
+    public ServiceRequest createRoomServiceRequest(Long userId, Long roomId, String items, String scheduledTimeStr, Long stayId) {
         LocalDateTime scheduledTime = null;
+
         if (scheduledTimeStr != null && !scheduledTimeStr.isEmpty()) {
             try {
-                // Try parsing with HH:MM
-                scheduledTime = LocalDateTime.now().with(java.time.LocalTime.parse(scheduledTimeStr, DateTimeFormatter.ofPattern("HH:mm")));
-            } catch (DateTimeParseException e) {
+                // Attempt 1: Try parsing the full LocalDateTime format (YYYY-MM-DDTHH:MM)
+                scheduledTime = LocalDateTime.parse(scheduledTimeStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (DateTimeParseException e1) {
                 try {
-                    // Try parsing with h:mm a (e.g., 7:30 PM)
-                    scheduledTime = LocalDateTime.now().with(java.time.LocalTime.parse(scheduledTimeStr, DateTimeFormatter.ofPattern("h:mm a")));
+                    // Attempt 2: If full date-time fails, try parsing HH:MM and combine with current date
+                    scheduledTime = LocalDateTime.now().with(java.time.LocalTime.parse(scheduledTimeStr, DateTimeFormatter.ofPattern("HH:mm")));
                 } catch (DateTimeParseException e2) {
-                    throw new IllegalArgumentException("Invalid time format. Please use HH:MM (e.g., 19:30) or H:MM AM/PM (e.g., 7:30 PM).", e2);
+                    try {
+                        // Attempt 3: If HH:MM fails, try parsing h:mm a (e.g., 7:30 PM) and combine with current date
+                        scheduledTime = LocalDateTime.now().with(java.time.LocalTime.parse(scheduledTimeStr, DateTimeFormatter.ofPattern("h:mm a")));
+                    } catch (DateTimeParseException e3) {
+                        // If all parsing attempts fail, throw an IllegalArgumentException
+                        throw new IllegalArgumentException(
+                            "Invalid time format for scheduled service. Please use 'YYYY-MM-DDTHH:MM' (e.g., '2025-06-26T19:00'), 'HH:MM' (e.g., '19:30'), or 'H:MM AM/PM' (e.g., '7:30 PM').", e3
+                        );
+                    }
                 }
             }
         }
 
         String description = "Room Service: " + items;
 
-        return createServiceRequest(userId, roomNumber, ServiceRequest.RequestType.ROOM_SERVICE, description, scheduledTime, stayId);
+        return createServiceRequest(userId, roomId, ServiceRequest.RequestType.ROOM_SERVICE, description, scheduledTime, stayId);
+    }
+    
+    @Transactional
+    public ServiceRequest scheduleHousekeeping(Long userId, Long roomId, String scheduledTimeStr, Long stayId) {
+        LocalDateTime scheduledTime = null;
+        if (scheduledTimeStr != null && !scheduledTimeStr.isEmpty()) {
+            try {
+                // Attempt 1: Try parsing the full LocalDateTime format (YYYY-MM-DDTHH:MM)
+                scheduledTime = LocalDateTime.parse(scheduledTimeStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (DateTimeParseException e1) {
+                try {
+                    // Attempt 2: If full date-time fails, try parsing HH:MM and combine with current date
+                    scheduledTime = LocalDateTime.now().with(java.time.LocalTime.parse(scheduledTimeStr, DateTimeFormatter.ofPattern("HH:mm")));
+                } catch (DateTimeParseException e2) {
+                    try {
+                        // Attempt 3: If HH:MM fails, try parsing h:mm a (e.g., 7:30 PM) and combine with current date
+                        scheduledTime = LocalDateTime.now().with(java.time.LocalTime.parse(scheduledTimeStr, DateTimeFormatter.ofPattern("h:mm a")));
+                    } catch (DateTimeParseException e3) {
+                        // If all parsing attempts fail, throw an IllegalArgumentException
+                        throw new IllegalArgumentException(
+                            "Invalid time format for scheduled service. Please use 'YYYY-MM-DDTHH:MM' (e.g., '2025-06-26T19:00'), 'HH:MM' (e.g., '19:30'), or 'H:MM AM/PM' (e.g., '7:30 PM').", e3
+                        );
+                    }
+                }
+            }
+        }
+
+        String description = "Housekeeping Service";
+
+        return createServiceRequest(userId, roomId, ServiceRequest.RequestType.HOUSEKEEPING, description, scheduledTime, stayId);
     }
 
 
@@ -158,11 +198,11 @@ public class ServiceRequestService {
 
     /**
      * Retrieves all service requests for a given room.
-     * @param room The room entity.
+     * @param roomId The ID of the room. // Changed from Room room
      * @return A list of service requests.
      */
-    public List<ServiceRequest> getServiceRequestsByRoom(Room room) {
-        return serviceRequestRepository.findByRoom(room);
+    public List<ServiceRequest> getServiceRequestsByRoom(Long roomId) { 
+        return serviceRequestRepository.findByRoom_RoomId(roomId);
     }
 
     /**
