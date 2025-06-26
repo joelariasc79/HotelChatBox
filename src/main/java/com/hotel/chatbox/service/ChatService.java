@@ -8,7 +8,6 @@ import com.hotel.chatbox.domain.Room;
 import com.hotel.chatbox.domain.ServiceRequest;
 import com.hotel.chatbox.domain.Stay;
 import com.hotel.chatbox.domain.User;
-
 import com.hotel.chatbox.repository.AmenitiesRepository;
 import com.hotel.chatbox.repository.BookingRepository;
 import com.hotel.chatbox.repository.FeedbackRepository;
@@ -74,6 +73,7 @@ public class ChatService {
 	private final StayRepository stayRepository;
 	private final ApplicationContext applicationContext;
 	private final ServiceRequestService serviceRequestService;
+	private final FeedbackService feedbackService;
 
 	@Value("classpath:/prompts/chat-prompt.st")
 	private Resource chatPromptTemplate;
@@ -151,6 +151,28 @@ public class ChatService {
 			Pattern.CASE_INSENSITIVE
 			);
 
+	// *****************************************
+	// FEEDBACK
+	// *****************************************
+
+	private final Pattern patternFeedbackWithRoom = Pattern.compile(
+		    "(?i)" +
+		    "(?:room\\s*([Ss]?\\d+)\\s*[:,\\-]?\\s*)?(.*?)(?:\\s+room\\s*([Ss]?\\d+)\\b)?",
+		    Pattern.DOTALL
+		);
+
+
+	// This pattern will now primarily focus on identifying if the message is a feedback
+	private final Pattern patternIsFeedback = Pattern.compile(
+		    "(?:(?:I'd like to|Can I|get|Please)\\s*(?:schedule|get)?(?:\\s*a)?\\s*feedback(?: service)?|" + // First main alternative
+		    "(?:I need|I'd like|Can I get|Please send)\\s*(?:a)?\\s*feedback(?: service)?)",                 // Second main alternative
+		    Pattern.CASE_INSENSITIVE
+		);
+
+	// *****************************************
+	// MANUAL ESCALATION
+	// *****************************************
+	
 	private final Pattern patternEscalateToHuman = Pattern.compile(
 			"(?:I want to talk to|connect me with|speak to|I need to speak with|escalate to|transfer me to)\\s*(?:a|the)?\\s*(?:human|agent|representative|manager|someone|person)",
 			Pattern.CASE_INSENSITIVE
@@ -170,7 +192,8 @@ public class ChatService {
 			StayService stayService,
 			StayRepository stayRepository,
 			ApplicationContext applicationContext,
-			ServiceRequestService serviceRequestService) {
+			ServiceRequestService serviceRequestService,
+			FeedbackService feedbackService) {
 		this.chatModel = chatModel;
 		this.vectorStore = vectorStore;
 		this.hotelRepository = hotelRepository;
@@ -186,277 +209,223 @@ public class ChatService {
 		this.stayRepository = stayRepository;
 		this.applicationContext = applicationContext;
 		this.serviceRequestService = serviceRequestService;
+		this.feedbackService = feedbackService;
 	}
-
+	
 	public Mono<String> handleGuestQuery(String guestMessage) {
-		System.out.println("guestMessage -1: " + guestMessage);		
+	    System.out.println("guestMessage -1: " + guestMessage);		
 
-		// **************************
-		// Human Agent Escalation Start:
-		// **************************
+	    // **************************
+	    // Human Agent Escalation Start:
+	    // **************************
 
-		Matcher matcherEscalateToHuman = patternEscalateToHuman.matcher(guestMessage);
-		if (matcherEscalateToHuman.find()) {
-			System.out.println("DEBUG: Matched Human Agent Escalation request.");
-			return Mono.just("Certainly! I'm connecting you with a human agent now. Please wait a moment while I transfer your request.");
+	    Matcher matcherEscalateToHuman = patternEscalateToHuman.matcher(guestMessage);
+	    if (matcherEscalateToHuman.find()) {
+	        System.out.println("DEBUG: Matched Human Agent Escalation request.");
+	        return Mono.just("Certainly! I'm connecting you with a human agent now. Please wait a moment while I transfer your request.");
 
-			//	    	  System.out.println("DEBUG: Matched Human Agent Escalation request.");
-			//	          // START OF NEW CODE TO ADD
-			//	          try {
-			//	              Long currentUserId = getCurrentUserId();
-			//	              User user = userRepository.findById(currentUserId)
-			//	                  .orElseThrow(() -> new IllegalArgumentException("User not found for escalation."));
-			//
-			//	              // Create a feedback entry of type ESCALATION
-			//	              Feedback feedback = new Feedback(
-			//	                  null, // ID (auto-generated)
-			//	                  user,
-			//	                  null, // No specific hotel for general escalation
-			//	                  null, // No specific booking for general escalation
-			//	                  Feedback.FeedbackType.COMPLAINT,
-			//	                  "User requested to speak with a human: \"" + guestMessage + "\"",
-			//	                  LocalDateTime.now(),
-			//	                  Feedback.FeedbackStatus.NEW, // Initial status
-			//	                  "Awaiting human agent assignment." // Initial agent notes
-			//	              );
-			//	              feedbackRepository.save(feedback);
-			//	              System.out.println("DEBUG: Escalation request logged for user " + user.getUsername() + ". Feedback ID: " + feedback.getFeedbackId());
-			//
-			//	              // In a real system, you'd integrate with a live chat, ticketing, or notification system here.
-			//	              // Examples (pseudo-code):
-			//	              // liveChatService.transferToAgent(user.getUserId(), guestMessage);
-			//	              // ticketingService.createTicket(user.getUsername(), "Human Agent Request", guestMessage, feedback.getFeedbackId());
-			//	              // notificationService.notifyAgent("User " + user.getUsername() + " needs assistance. Feedback ID: " + feedback.getFeedbackId());
-			//
-			//	              return Mono.just("Certainly! I've escalated your request to a human agent. They will review your message and get back to you shortly.");
-			//
-			//	          } catch (IllegalStateException | IllegalArgumentException e) {
-			//	              System.err.println("ERROR: Failed to log escalation request due to user context: " + e.getMessage());
-			//	              return Mono.just("I'm sorry, I couldn't log your request to a human agent right now. Please try again or reach out directly if the issue is urgent.");
-			//	          } catch (Exception e) {
-			//	              System.err.println("CRITICAL ERROR: Unexpected error during human escalation: " + e.getMessage());
-			//	              e.printStackTrace();
-			//	              return Mono.just("I encountered an unexpected issue while trying to connect you to a human agent. Please try again later.");
-			//	          }
-			//	          // END OF NEW CODE TO ADD
-		}
+	        //	    	  System.out.println("DEBUG: Matched Human Agent Escalation request.");
+	        //	          // START OF NEW CODE TO ADD
+	        //	          try {
+	        //	              Long currentUserId = getCurrentUserId();
+	        //	              User user = userRepository.findById(currentUserId)
+	        //	                  .orElseThrow(() -> new IllegalArgumentException("User not found for escalation."));
+	        //
+	        //	              // Create a feedback entry of type ESCALATION
+	        //	              Feedback feedback = new Feedback(
+	        //	                  null, // ID (auto-generated)
+	        //	                  user,
+	        //	                  null, // No specific hotel for general escalation
+	        //	                  null, // No specific booking for general escalation
+	        //	                  Feedback.FeedbackType.COMPLAINT,
+	        //	                  "User requested to speak with a human: \"" + guestMessage + "\"",
+	        //	                  LocalDateTime.now(),
+	        //	                  Feedback.FeedbackStatus.NEW, // Initial status
+	        //	                  "Awaiting human agent assignment." // Initial agent notes
+	        //	              );
+	        //	              feedbackRepository.save(feedback);
+	        //	              System.out.println("DEBUG: Escalation request logged for user " + user.getUsername() + ". Feedback ID: " + feedback.getFeedbackId());
+	        //
+	        //	              // In a real system, you'd integrate with a live chat, ticketing, or notification system here.
+	        //	              // Examples (pseudo-code):
+	        //	              // liveChatService.transferToAgent(user.getUserId(), guestMessage);
+	        //	              // ticketingService.createTicket(user.getUsername(), "Human Agent Request", guestMessage, feedback.getFeedbackId());
+	        //	              // notificationService.notifyAgent("User " + user.getUsername() + " needs assistance. Feedback ID: " + feedback.getFeedbackId());
+	        //
+	        //	              return Mono.just("Certainly! I've escalated your request to a human agent. They will review your message and get back to you shortly.");
+	        //
+	        //	          } catch (IllegalStateException | IllegalArgumentException e) {
+	        //	              System.err.println("ERROR: Failed to log escalation request due to user context: " + e.getMessage());
+	        //	              return Mono.just("I'm sorry, I couldn't log your request to a human agent right now. Please try again or reach out directly if the issue is urgent.");
+	        //	          } catch (Exception e) {
+	        //	              System.err.println("CRITICAL ERROR: Unexpected error during human escalation: " + e.getMessage());
+	        //	              e.printStackTrace();
+	        //	              return Mono.just("I encountered an unexpected issue while trying to connect you to a human agent. Please try again later.");
+	        //	          }
+	        //	          // END OF NEW CODE TO ADD
+	    }
 
-		// **************************
-		// Check In:
-		// **************************
+	    // **************************
+	    // Check In:
+	    // **************************
 
-		Matcher matcherCheckIn = patternCheckIn.matcher(guestMessage);
-		if (matcherCheckIn.find()) {
-			Long bookingId = Long.parseLong(matcherCheckIn.group(1));
-			// Ensure you are creating an instance of the *correct* CheckInRequest
-			var checkInFunction = (Function<CheckInRequest, String>) applicationContext.getBean("performCheckIn");
-			return Mono.just(checkInFunction.apply(new CheckInRequest(bookingId)));
-		}
+	    Matcher matcherCheckIn = patternCheckIn.matcher(guestMessage);
+	    if (matcherCheckIn.find()) {
+	        Long bookingId = Long.parseLong(matcherCheckIn.group(1));
+	        // Ensure you are creating an instance of the *correct* CheckInRequest
+	        var checkInFunction = (Function<CheckInRequest, String>) applicationContext.getBean("performCheckIn");
+	        return Mono.just(checkInFunction.apply(new CheckInRequest(bookingId)));
+	    }
 
-		// **************************
-		// Room Service:
-		// **************************
+	    // **************************
+	    // Room Service:
+	    // **************************
 
-		Matcher matcherRoomServiceFull = patternRoomServiceFull.matcher(guestMessage);
-		Matcher matcherRoomServiceItemsTime = patternRoomServiceItemsTime.matcher(guestMessage);
-		Matcher matcherRoomServiceItemsOnly = patternRoomServiceItemsOnly.matcher(guestMessage);
+	    Matcher matcherRoomServiceFull = patternRoomServiceFull.matcher(guestMessage);
+	    Matcher matcherRoomServiceItemsTime = patternRoomServiceItemsTime.matcher(guestMessage);
+	    Matcher matcherRoomServiceItemsOnly = patternRoomServiceItemsOnly.matcher(guestMessage);
 
-		if (matcherRoomServiceFull.find()) {
-			String items = matcherRoomServiceFull.group(1).trim();
-			String roomNumber = matcherRoomServiceFull.group(2).trim();
-			String dateContext = matcherRoomServiceFull.group(3); // Group 3: dateContext
-			String timeStr = matcherRoomServiceFull.group(4);     // Group 4: timeStr
+	    if (matcherRoomServiceFull.find()) {
+	        String items = matcherRoomServiceFull.group(1).trim();
+	        String roomNumber = matcherRoomServiceFull.group(2).trim();
+	        String dateContext = matcherRoomServiceFull.group(3); // Group 3: dateContext
+	        String timeStr = matcherRoomServiceFull.group(4);     // Group 4: timeStr
 
-			System.out.println("DEBUG RoomService - Full Match:");
-			System.out.println("  Items: " + items);
-			System.out.println("  Room: " + roomNumber);
-			System.out.println("  Date: " + dateContext);
-			System.out.println("  Time: " + timeStr);
+	        System.out.println("DEBUG RoomService - Full Match:");
+	        System.out.println("  Items: " + items);
+	        System.out.println("  Room: " + roomNumber);
+	        System.out.println("  Date: " + dateContext);
+	        System.out.println("  Time: " + timeStr);
 
-			return handleRoomServiceRequest(items, dateContext, timeStr, roomNumber, guestMessage);
+	        return handleRoomServiceRequest(items, dateContext, timeStr, roomNumber, guestMessage);
 
-		} else if (matcherRoomServiceItemsTime.find()) {
-			String items = matcherRoomServiceItemsTime.group(1).trim();
-			String dateContext = matcherRoomServiceItemsTime.group(2); // Group 2: dateContext
-			String timeStr = matcherRoomServiceItemsTime.group(3).trim(); // Group 3: timeStr
+	    } else if (matcherRoomServiceItemsTime.find()) {
+	        String items = matcherRoomServiceItemsTime.group(1).trim();
+	        String dateContext = matcherRoomServiceItemsTime.group(2); // Group 2: dateContext
+	        String timeStr = matcherRoomServiceItemsTime.group(3).trim(); // Group 3: timeStr
 
-			System.out.println("DEBUG RoomService - Matched items+time:");
-			System.out.println("  Items: " + items);
-			System.out.println("  Date: " + dateContext);
-			System.out.println("  Time: " + timeStr);
+	        System.out.println("DEBUG RoomService - Matched items+time:");
+	        System.out.println("  Items: " + items);
+	        System.out.println("  Date: " + dateContext);
+	        System.out.println("  Time: " + timeStr);
 
-			String responseTime = (dateContext != null ? dateContext + " " : "") + timeStr;
-			return Mono.just("I got your request for " + items + " for " + responseTime + ". What room number should I send it to?");
+	        String responseTime = (dateContext != null ? dateContext + " " : "") + timeStr;
+	        return Mono.just("I got your request for " + items + " for " + responseTime + ". What room number should I send it to?");
 
-		} else if (matcherRoomServiceItemsOnly.find()) {
-			String items = matcherRoomServiceItemsOnly.group(1).trim();
+	    } else if (matcherRoomServiceItemsOnly.find()) {
+	        String items = matcherRoomServiceItemsOnly.group(1).trim();
 
-			System.out.println("DEBUG RoomService - Matched items only:");
-			System.out.println("  Items: " + items);
+	        System.out.println("DEBUG RoomService - Matched items only:");
+	        System.out.println("  Items: " + items);
 
-			return Mono.just("You'd like " + items + "? And for what room number and time?");
-		}
+	        return Mono.just("You'd like " + items + "? And for what room number and time?");
+	    }
 
-		// **************************
-		// Housekeeping Service:
-		// **************************
+	    // **************************
+	    // Housekeeping Service:
+	    // **************************
 
-		Matcher matcherHousekeepingFull = patternHousekeepingFull.matcher(guestMessage);
-		Matcher matcherHousekeepingTimeOnly = patternHousekeepingTimeOnly.matcher(guestMessage);
-		Matcher matcherHousekeepingSimple = patternHousekeepingSimple.matcher(guestMessage);
+	    Matcher matcherHousekeepingFull = patternHousekeepingFull.matcher(guestMessage);
+	    Matcher matcherHousekeepingTimeOnly = patternHousekeepingTimeOnly.matcher(guestMessage);
+	    Matcher matcherHousekeepingSimple = patternHousekeepingSimple.matcher(guestMessage);
 
-		if (matcherHousekeepingFull.find()) {
-			String roomNumber = matcherHousekeepingFull.group(1); // Group 1: roomNumber
-			String dateContext = matcherHousekeepingFull.group(2); // Group 2: dateContext
-			String timeStr = matcherHousekeepingFull.group(3);     // Group 3: timeStr
+	    if (matcherHousekeepingFull.find()) {
+	        String roomNumber = matcherHousekeepingFull.group(1); // Group 1: roomNumber
+	        String dateContext = matcherHousekeepingFull.group(2); // Group 2: dateContext
+	        String timeStr = matcherHousekeepingFull.group(3);     // Group 3: timeStr
 
-			System.out.println("DEBUG Housekeeping - Matched Full Pattern:");
-			System.out.println("  Room Number: " + roomNumber);
-			System.out.println("  Date Context (Group 2): " + dateContext);
-			System.out.println("  Time String (Group 3): " + timeStr);
+	        System.out.println("DEBUG Housekeeping - Matched Full Pattern:");
+	        System.out.println("  Room Number: " + roomNumber);
+	        System.out.println("  Date Context (Group 2): " + dateContext);
+	        System.out.println("  Time String (Group 3): " + timeStr);
 
-			return handleHousekeepingRequest(dateContext, timeStr, roomNumber, guestMessage);
+	        return handleHousekeepingRequest(dateContext, timeStr, roomNumber, guestMessage);
 
-		} else if (matcherHousekeepingTimeOnly.find()) {
-			String dateContext = matcherHousekeepingTimeOnly.group(1); // Group 1: dateContext
-			String timeStr = matcherHousekeepingTimeOnly.group(2).trim(); // Group 2: timeStr
+	    } else if (matcherHousekeepingTimeOnly.find()) {
+	        String dateContext = matcherHousekeepingTimeOnly.group(1); // Group 1: dateContext
+	        String timeStr = matcherHousekeepingTimeOnly.group(2).trim(); // Group 2: timeStr
 
-			System.out.println("DEBUG Housekeeping - Matched Time Only Pattern:");
-			System.out.println("  Date Context (Group 1): " + dateContext);
-			System.out.println("  Time String (Group 2): " + timeStr);
+	        System.out.println("DEBUG Housekeeping - Matched Time Only Pattern:");
+	        System.out.println("  Date Context (Group 1): " + dateContext);
+	        System.out.println("  Time String (Group 2): " + timeStr);
 
-			String responseTime = (dateContext != null ? dateContext + " " : "") + timeStr;
-			return Mono.just("I can schedule housekeeping for " + responseTime + ". What room number should it be for?");
+	        String responseTime = (dateContext != null ? dateContext + " " : "") + timeStr;
+	        return Mono.just("I can schedule housekeeping for " + responseTime + ". What room number should it be for?");
 
-		} else if (matcherHousekeepingSimple.find()) {
-			System.out.println("DEBUG Housekeeping - Matched Simple Pattern.");
-			return Mono.just("You'd like housekeeping? And for what room number and time?");
-		}
+	    } else if (matcherHousekeepingSimple.find()) {
+	        System.out.println("DEBUG Housekeeping - Matched Simple Pattern.");
+	        return Mono.just("You'd like housekeeping? And for what room number and time?");
+	    }
 
-		List<Document> relevantDocuments = vectorStore.similaritySearch(
-				SearchRequest.builder().query(guestMessage).topK(3).build());
-		String context = relevantDocuments.stream()
-				.map(doc -> {
-					String currentContent = doc.getFormattedContent();
-					String type = (String) doc.getMetadata().get("type");
-					Integer sourceId = (Integer) doc.getMetadata().get("source_id");
 
-					if (sourceId != null) {
-						if ("hotel_description".equals(type)) {
-							Optional<Hotel> hotel = hotelRepository.findById(sourceId);
-							return hotel.map(h -> "Hotel Information: " + h.getHotelName() + " - " + h.getDescription() + " Amenities: " + h.getAmenities().stream().map(Amenities::getName).collect(Collectors.joining(", ")) + " | ")
-									.orElse(currentContent);
-						} else if ("room_description".equals(type)) {
-							Optional<HotelRoom> room = hotelRoomRepository.findById(sourceId);
-							return room.map(r -> "Room Information: " + r.getDescription() + " Price: $" + r.getPrice() + " Amenities: " + r.getAmenities().stream().map(Amenities::getName).collect(Collectors.joining(", ")) + " | ")
-									.orElse(currentContent);
-						} else if ("amenity_info".equals(type)) {
-							Optional<Amenities> amenity = amenitiesRepository.findById(sourceId);
-							return amenity.map(a -> "Amenity: " + a.getName() + " | ")
-									.orElse(currentContent);
-						}
-					}
-					return currentContent;
-				})
-				.collect(Collectors.joining("\n---\n"));
+	    // **************************
+	    // Feedback:
+	    // **************************
+	    
+	    Matcher matcher = patternFeedbackWithRoom.matcher(guestMessage);
+	    if (matcher.matches()) {
+	        String roomStart = matcher.group(1);
+	        String message = matcher.group(2).trim();
+	        String roomEnd = matcher.group(3);
 
-		PromptTemplate promptTemplate = new PromptTemplate(chatPromptTemplate);
-		Prompt prompt = promptTemplate.create(
-				Map.of("context", context, "question", guestMessage)
-				);
+	        String roomNumber = roomStart != null ? roomStart : roomEnd;
 
-		System.out.println("DEBUG: Sending prompt to AI ChatModel: " + prompt.getContents());
+	        System.out.println("Room: " + (roomNumber != null ? roomNumber : "not provided"));
+	        System.out.println("Feedback: " + message);
+	        
+	        return handleFeedback(roomNumber, guestMessage);
+	    }
 
-		try {
-			String aiResponseContent = chatModel.call(prompt).getResult().getOutput().getText();
+	    // **************************
+	    // Prompt :
+	    // **************************
 
-			System.out.println("DEBUG: aiResponseContent: " + aiResponseContent);
+	    List<Document> relevantDocuments = vectorStore.similaritySearch(
+	            SearchRequest.builder().query(guestMessage).topK(3).build());
+	    String context = relevantDocuments.stream()
+	            .map(doc -> {
+	                String currentContent = doc.getFormattedContent();
+	                String type = (String) doc.getMetadata().get("type");
+	                Integer sourceId = (Integer) doc.getMetadata().get("source_id");
 
-			String finalChatResponse = aiResponseContent;
-			String feedbackConfirmation = "";
-			Pattern feedbackPattern = Pattern.compile("\\{\\s*\"feedback\":\\s*\\{.*?\\}\\s*\\}", Pattern.DOTALL);
-			Matcher matcher = feedbackPattern.matcher(aiResponseContent);
+	                if (sourceId != null) {
+	                    if ("hotel_description".equals(type)) {
+	                        Optional<Hotel> hotel = hotelRepository.findById(sourceId);
+	                        return hotel.map(h -> "Hotel Information: " + h.getHotelName() + " - " + h.getDescription() + " Amenities: " + h.getAmenities().stream().map(Amenities::getName).collect(Collectors.joining(", ")) + " | ")
+	                                .orElse(currentContent);
+	                    } else if ("room_description".equals(type)) {
+	                        Optional<HotelRoom> room = hotelRoomRepository.findById(sourceId);
+	                        return room.map(r -> "Room Information: " + r.getDescription() + " Price: $" + r.getPrice() + " Amenities: " + r.getAmenities().stream().map(Amenities::getName).collect(Collectors.joining(", ")) + " | ")
+	                                .orElse(currentContent);
+	                    } else if ("amenity_info".equals(type)) {
+	                        Optional<Amenities> amenity = amenitiesRepository.findById(sourceId);
+	                        return amenity.map(a -> "Amenity: " + a.getName() + " | ")
+	                                .orElse(currentContent);
+	                    }
+	                }
+	                return currentContent;
+	            })
+	            .collect(Collectors.joining("\n---\n"));
 
-			if (matcher.find()) {
-				String feedbackJsonString = matcher.group();
-				System.out.println("DEBUG: Found feedback JSON: " + feedbackJsonString);
+	    PromptTemplate promptTemplate = new PromptTemplate(chatPromptTemplate);
+	    Prompt prompt = promptTemplate.create(
+	            Map.of("context", context, "question", guestMessage)
+	            );
 
-				try {
-					ObjectMapper objectMapper = new ObjectMapper();
-					Map<String, Map<String, String>> parsedFeedback = objectMapper.readValue(feedbackJsonString,
-							new TypeReference<Map<String, Map<String, String>>>() {});
+	    System.out.println("DEBUG: Sending prompt to AI ChatModel: " + prompt.getContents());
 
-					Map<String, String> feedbackData = parsedFeedback.get("feedback");
-					if (feedbackData != null && feedbackData.containsKey("type") && feedbackData.containsKey("message")) {
-						String typeStr = feedbackData.get("type");
-						String messageStr = feedbackData.get("message");
+	    // The AI model call and its associated try-catch block for the final response
+	    // and feedback extraction from AI response are moved here directly.
+	    try {
+	        String aiResponseContent = chatModel.call(prompt).getResult().getOutput().getText();
+	        System.out.println("DEBUG: aiResponseContent: " + aiResponseContent);
+	        return Mono.just(aiResponseContent); // Return the raw AI response if no feedback JSON is expected
+	    } catch (Exception e) {
+	        System.err.println("Error processing AI response: " + e.getMessage());
+	        return Mono.just("I'm sorry, I encountered an error while processing your request. Please try again later.");
+	    }
+	}	
 
-						Feedback.FeedbackType feedbackType = null;
-						try {
-							feedbackType = Feedback.FeedbackType.valueOf(typeStr.toUpperCase());
-						} catch (IllegalArgumentException e) {
-							System.err.println("Unknown feedback type from AI: " + typeStr + ". Defaulting to GENERAL.");
-							feedbackType = Feedback.FeedbackType.GENERAL;
-						}
-
-						User currentUser = userRepository.findByUsername("user").orElse(null);
-						Hotel feedbackHotel = null;
-						Optional<Document> hotelDoc = relevantDocuments.stream()
-								.filter(doc -> "hotel_description".equals(doc.getMetadata().get("type")) && doc.getMetadata().containsKey("source_id"))
-								.findFirst();
-
-						if (hotelDoc.isPresent()) {
-							Integer hotelId = (Integer) hotelDoc.get().getMetadata().get("source_id");
-							if (hotelId != null) {
-								feedbackHotel = hotelRepository.findById(hotelId).orElse(null);
-								if (feedbackHotel != null) {
-									System.out.println("DEBUG: Associated feedback with Hotel: " + feedbackHotel.getHotelName() + " (ID: " + feedbackHotel.getHotelId() + ")");
-								} else {
-									System.out.println("DEBUG: Could not find Hotel with ID from document: " + hotelId);
-								}
-							}
-						}
-
-						if (currentUser != null) {
-							Feedback feedback = new Feedback(
-									null,
-									currentUser,
-									feedbackHotel,
-									null,
-									feedbackType,
-									messageStr,
-									LocalDateTime.now(),
-									Feedback.FeedbackStatus.NEW,
-									null
-									);
-							if (feedbackType == Feedback.FeedbackType.COMPLAINT && (messageStr.toLowerCase().contains("urgent") || messageStr.toLowerCase().contains("escalate") || messageStr.toLowerCase().contains("manager"))) {
-								feedback.setStatus(Feedback.FeedbackStatus.ESCALATED);
-								feedback.setAgentNotes("AI detected urgent complaint, escalated automatically.");
-								feedbackConfirmation = "\nYour urgent complaint has been logged and escalated to a human agent. We will get back to you shortly.";
-							} else {
-								feedback.setStatus(Feedback.FeedbackStatus.NEW);
-								feedbackConfirmation = "\nThank you for your feedback! It has been logged.";
-							}
-							feedbackRepository.save(feedback);
-							System.out.println("DEBUG: Feedback saved to DB: " + feedback.getMessage() + " (Type: " + feedback.getType() + ", Status: " + feedback.getStatus() + ")");
-						} else {
-							System.err.println("DEBUG: User 'user' not found, skipping feedback save.");
-							feedbackConfirmation = "\nI would like to log your feedback, but I couldn't identify you. Please ensure you are logged in.";
-						}
-					}
-				} catch (Exception e) {
-					System.err.println("DEBUG: Error parsing feedback JSON from AI response: " + e.getMessage());
-				}
-
-				finalChatResponse = matcher.replaceFirst("").trim();
-			}
-
-			return Mono.just(finalChatResponse + feedbackConfirmation);
-		} catch (Exception e) {
-			System.err.println("Error processing AI response or function call: " + e.getMessage());
-			return Mono.just("I'm sorry, I encountered an error while processing your request. Please try again later.");
-		}
-	}
 
 
 	private Mono<String> handleRoomServiceRequest(String items, String dateContext, String timeStr, String roomNumber, String originalMessage) {
@@ -502,7 +471,7 @@ public class ChatService {
 		}
 
 		LocalDateTime scheduledDateTime = schdDateTime;
-		return getRoomServiceRequestContext(roomNumber)
+		return getRoomNumberContext(roomNumber)
 				.flatMap(context -> {
 					ServiceRequest roomServiceReq = serviceRequestService.createRoomServiceRequest(
 							context.user().getId(), // Use ID from context
@@ -568,7 +537,7 @@ public class ChatService {
 
 		LocalDateTime scheduledDateTime = schdDateTime;
 		// Use the new helper method to get the room and stay context
-		return getRoomServiceRequestContext(roomNumber)
+		return getRoomNumberContext(roomNumber)
 				.flatMap(context -> {
 					ServiceRequest housekeepingReq = serviceRequestService.scheduleHousekeeping(
 							context.user().getId(), // Use ID from context
@@ -591,12 +560,191 @@ public class ChatService {
 				});
 	}
 
+//	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//	handleFeedback: DON'T DELETE, THIS HAS THE CORRECT LOGIC
+//	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//	private Mono<String> handleFeedback(String roomNumber, String originalMessage) {
+//	    Long currentUserId = getCurrentUserId(); // Assuming this method exists to get the current user ID
+//
+//	    // Case 1: roomNumber is explicitly provided
+//	    if (roomNumber != null && !roomNumber.trim().isEmpty()) {
+//	        return getRoomNumberContext(roomNumber)
+//	                .flatMap(context -> {
+//	                    Feedback savedFeedback = feedbackService.saveFeedback(
+//	                            context.user().getId(),           // User ID from context
+//	                            context.room().getRoomId(),       // Room ID from context
+//	                            Feedback.FeedbackType.GENERAL,    // Assuming general feedback for chat
+//	                            originalMessage,                  // The actual message/description
+//	                            context.stayId()                  // Stay ID from context (can be null)
+//	                    );
+//	                    return Mono.just("Your feedback for room " + roomNumber +
+//	                            " has been submitted. Thank you for your input! Feedback ID: " + savedFeedback.getFeedbackId() + ".");
+//	                })
+//	                .onErrorResume(IllegalArgumentException.class, e -> {
+//	                    System.err.println("ERROR: Failed to submit feedback for a specific room: " + e.getMessage());
+//	                    return Mono.just("I'm sorry, I couldn't submit your feedback for that room: " + e.getMessage());
+//	                })
+//	                .onErrorResume(Exception.class, e -> {
+//	                    System.err.println("CRITICAL ERROR: Unexpected error submitting feedback for specific room: " + e.getMessage());
+//	                    e.printStackTrace();
+//	                    return Mono.just("I encountered an unexpected issue while trying to submit your feedback. Please try again later.");
+//	                });
+//	    } else {
+//	        // Case 2: roomNumber is NOT provided, try to infer from active stay
+//	        return Mono.fromCallable(() -> {
+//	            User currentUser = userRepository.findById(currentUserId)
+//	                    .orElseThrow(() -> new IllegalArgumentException("User with ID " + currentUserId + " not found."));
+//
+//	            Long inferredRoomId = null;
+//	            Long inferredStayId = null;
+//	            String inferredRoomNumber = null;
+//
+//	            // Attempt to find an active stay for the user
+//	            List<Stay> activeStays = stayService.findStaysByUserAndStayStatus(currentUser, Stay.StayStatus.IN_PROGRESS);
+//
+//	            if (!activeStays.isEmpty()) {
+//	                // If there's exactly one active stay, use its room and stay ID
+//	                if (activeStays.size() == 1) {
+//	                    Stay activeStay = activeStays.get(0);
+//	                    if (activeStay.getRoom() != null) {
+//	                        inferredRoomId = activeStay.getRoom().getRoomId();
+//	                        inferredRoomNumber = activeStay.getRoom().getRoomNumber();
+//	                    }
+//	                    inferredStayId = activeStay.getStayId();
+//	                    System.out.println("DEBUG: Inferred room " + inferredRoomNumber + " and stay " + inferredStayId + " from user's single active stay.");
+//	                } else {
+//	                    // Handle ambiguity if multiple active stays
+//	                    System.err.println("WARNING: User " + currentUserId + " has multiple active stays. Cannot infer specific room for feedback.");
+//	                    // Optionally, you might want to return an error to the user asking them to specify
+//	                    // For now, we proceed without room/stay if ambiguous.
+//	                }
+//	            } else {
+//	                System.out.println("DEBUG: User " + currentUserId + " has no active stays. Submitting general feedback without room/stay context.");
+//	            }
+//
+//	            Feedback savedFeedback = feedbackService.saveFeedback(
+//	                    currentUser.getId(),        // User ID
+//	                    inferredRoomId,             // Inferred Room ID (can be null)
+//	                    Feedback.FeedbackType.GENERAL,
+//	                    originalMessage,
+//	                    inferredStayId              // Inferred Stay ID (can be null)
+//	            );
+//
+//	            // Construct response based on whether a room was inferred
+//	            if (inferredRoomNumber != null) {
+//	                return "Your feedback for your current room " + inferredRoomNumber +
+//	                       " has been submitted. Thank you for your input! Feedback ID: " + savedFeedback.getFeedbackId() + ".";
+//	            } else {
+//	                return "Your general feedback has been submitted. Thank you for your input! Feedback ID: " + savedFeedback.getFeedbackId() + ".";
+//	            }
+//	        })
+//	        .onErrorResume(IllegalArgumentException.class, e -> {
+//	            System.err.println("ERROR: Failed to submit general feedback: " + e.getMessage());
+//	            return Mono.just("I'm sorry, I couldn't submit your feedback: " + e.getMessage());
+//	        })
+//	        .onErrorResume(Exception.class, e -> {
+//	            System.err.println("CRITICAL ERROR: Unexpected error submitting general feedback: " + e.getMessage());
+//	            e.printStackTrace();
+//	            return Mono.just("I encountered an unexpected issue while trying to submit your feedback. Please try again later.");
+//	        });
+//	    }
+//	}
+	
+	
+	//	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//	handleFeedback: TESTING PURPOSES
+	//	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	private Mono<String> handleFeedback(String roomNumber, String originalMessage) {
+	    Long currentUserId = getCurrentUserId(); // Assuming this method exists to get the current user ID
+
+	    // Case 1: roomNumber is explicitly provided
+	    if (roomNumber != null && !roomNumber.trim().isEmpty()) {
+	        return getRoomNumberContext(roomNumber)
+	                .flatMap(context -> {
+	                    Feedback savedFeedback = feedbackService.saveFeedback(
+	                            context.user().getId(),           // User ID from context
+	                            context.room().getRoomId(),       // Room ID from context
+	                            Feedback.FeedbackType.GENERAL,    // Assuming general feedback for chat
+	                            originalMessage,                  // The actual message/description
+	                            context.stayId()                  // Stay ID from context (can be null)
+	                    );
+	                    return Mono.just("Your feedback for room " + roomNumber +
+	                            " has been submitted. Thank you for your input! Feedback ID: " + savedFeedback.getFeedbackId() + ".");
+	                })
+	                .onErrorResume(IllegalArgumentException.class, e -> {
+	                    System.err.println("ERROR: Failed to submit feedback for a specific room: " + e.getMessage());
+	                    return Mono.just("I'm sorry, I couldn't submit your feedback for that room: " + e.getMessage());
+	                })
+	                .onErrorResume(Exception.class, e -> {
+	                    System.err.println("CRITICAL ERROR: Unexpected error submitting feedback for specific room: " + e.getMessage());
+	                    e.printStackTrace();
+	                    return Mono.just("I encountered an unexpected issue while trying to submit your feedback. Please try again later.");
+	                });
+	    } else {
+	        // Case 2: roomNumber is NOT provided, try to infer from active stay
+	        return Mono.fromCallable(() -> {
+	            User currentUser = userRepository.findById(currentUserId)
+	                    .orElseThrow(() -> new IllegalArgumentException("User with ID " + currentUserId + " not found."));
+
+	            Long inferredRoomId = null;
+	            Long inferredStayId = null;
+	            String inferredRoomNumber = null;
+
+	            // Attempt to find an active stay for the user
+	            List<Stay> activeStays = stayService.findStaysByUserAndStayStatus(currentUser, Stay.StayStatus.IN_PROGRESS);
+
+	            if (!activeStays.isEmpty()) {
+	                // If there's one or more active stays, use the first one
+	                Stay activeStay = activeStays.get(0); // *** Changed: Always get the first stay ***
+	                if (activeStay.getRoom() != null) {
+	                    inferredRoomId = activeStay.getRoom().getRoomId();
+	                    inferredRoomNumber = activeStay.getRoom().getRoomNumber();
+	                }
+	                inferredStayId = activeStay.getStayId();
+
+	                if (activeStays.size() > 1) {
+	                    System.out.println("WARNING: User " + currentUserId + " has multiple active stays. Using the first found stay (ID: " + inferredStayId + ", Room: " + inferredRoomNumber + ") for feedback context.");
+	                } else {
+	                    System.out.println("DEBUG: Inferred room " + inferredRoomNumber + " and stay " + inferredStayId + " from user's single active stay.");
+	                }
+	            } else {
+	                System.out.println("DEBUG: User " + currentUserId + " has no active stays. Submitting general feedback without room/stay context.");
+	            }
+
+	            Feedback savedFeedback = feedbackService.saveFeedback(
+	                    currentUser.getId(),        // User ID
+	                    inferredRoomId,             // Inferred Room ID (can be null if room is null)
+	                    Feedback.FeedbackType.GENERAL,
+	                    originalMessage,
+	                    inferredStayId              // Inferred Stay ID (can be null)
+	            );
+
+	            // Construct response based on whether a room was inferred
+	            if (inferredRoomNumber != null) {
+	                return "Your feedback for your current room " + inferredRoomNumber +
+	                       " has been submitted. Thank you for your input! Feedback ID: " + savedFeedback.getFeedbackId() + ".";
+	            } else {
+	                return "Your general feedback has been submitted. Thank you for your input! Feedback ID: " + savedFeedback.getFeedbackId() + ".";
+	            }
+	        })
+	        .onErrorResume(IllegalArgumentException.class, e -> {
+	            System.err.println("ERROR: Failed to submit general feedback: " + e.getMessage());
+	            return Mono.just("I'm sorry, I couldn't submit your feedback: " + e.getMessage());
+	        })
+	        .onErrorResume(Exception.class, e -> {
+	            System.err.println("CRITICAL ERROR: Unexpected error submitting general feedback: " + e.getMessage());
+	            e.printStackTrace();
+	            return Mono.just("I encountered an unexpected issue while trying to submit your feedback. Please try again later.");
+	        });
+	    }
+	}
+	
 	// New private record to hold the common context for room/stay related requests
-	private record RoomRequestContext(User user, Room room, Long stayId) {}
+	private record RoomNumbertContext(User user, Room room, Long stayId) {}
 
 
 	// New helper method to get the common Room and Stay context
-	private Mono<RoomRequestContext> getRoomServiceRequestContext(String roomNumber) {
+	private Mono<RoomNumbertContext> getRoomNumberContext(String roomNumber) {
 		Long currentUserId = getCurrentUserId();
 
 		try {
@@ -643,7 +791,7 @@ public class ChatService {
 				System.err.println("ERROR: Matched room " + roomNumber + " but could not find corresponding active stay. Proceeding without stayId for ServiceRequest.");
 			}
 
-			return Mono.just(new RoomRequestContext(currentUser, targetRoom, stayId));
+			return Mono.just(new RoomNumbertContext(currentUser, targetRoom, stayId));
 
 		} catch (IllegalArgumentException e) {
 			return Mono.error(e); // Propagate known IllegalArgumentExceptions
@@ -653,8 +801,6 @@ public class ChatService {
 			return Mono.error(new IllegalStateException("An unexpected error occurred while processing your request context."));
 		}
 	}
-
-
 
 	private Long getCurrentUserId() {
 		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

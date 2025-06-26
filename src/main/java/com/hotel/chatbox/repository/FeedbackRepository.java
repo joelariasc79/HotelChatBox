@@ -30,4 +30,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
     List<Feedback> findByUserAndStatus(User user, Feedback.FeedbackStatus status);
     
     
+    List<Feedback> findByRoom_RoomId(Long roomId);
+    
+    
 }

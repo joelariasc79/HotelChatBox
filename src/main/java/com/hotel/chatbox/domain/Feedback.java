@@ -15,11 +15,15 @@ public class Feedback {
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "room_id", nullable = true) // Assuming feedback might be without a specific room, or for a general hotel area
+    private Room room; // You need to have a 'Room' entity defined elsewhere
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "hotel_id", nullable = true)
     private Hotel hotel;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "stay_id", nullable = true) // Optional: Link to a specific stay
+    @JoinColumn(name = "stay_id", nullable = true)
     private Stay stay;
 
     @Column(nullable = false)
@@ -47,222 +51,113 @@ public class Feedback {
         NEW, IN_REVIEW, RESOLVED, ESCALATED
     }
 
-	public Feedback() {
-		super();
-	}
+    public Feedback() {
+        super();
+    }
 
-	public Feedback(Long feedbackId, User user, Hotel hotel, Stay stay, FeedbackType type, String message,
-			LocalDateTime submissionDate, FeedbackStatus status, String agentNotes) {
-		super();
-		this.feedbackId = feedbackId;
-		this.user = user;
-		this.hotel = hotel;
-		this.stay = stay;
-		this.type = type;
-		this.message = message;
-		this.submissionDate = submissionDate;
-		this.status = status;
-		this.agentNotes = agentNotes;
-	}
+    // Updated constructor to remove 'scheduledTime' parameter
+    public Feedback(Long feedbackId, User user, Room room, Hotel hotel, Stay stay, FeedbackType type, String message,
+                    LocalDateTime submissionDate, FeedbackStatus status, String agentNotes) {
+        super();
+        this.feedbackId = feedbackId;
+        this.user = user;
+        this.room = room;
+        this.hotel = hotel;
+        this.stay = stay;
+        this.type = type;
+        this.message = message;
+        this.submissionDate = submissionDate;
+        this.status = status; 
+        this.agentNotes = agentNotes;
+    }
 
-	public Long getFeedbackId() {
-		return feedbackId;
-	}
+    // Getters and Setters
 
-	public void setFeedbackId(Long feedbackId) {
-		this.feedbackId = feedbackId;
-	}
+    public Long getFeedbackId() {
+        return feedbackId;
+    }
 
-	public User getUser() {
-		return user;
-	}
+    public void setFeedbackId(Long feedbackId) {
+        this.feedbackId = feedbackId;
+    }
 
-	public void setUser(User user) {
-		this.user = user;
-	}
+    public User getUser() {
+        return user;
+    }
 
-	public Hotel getHotel() {
-		return hotel;
-	}
+    public void setUser(User user) {
+        this.user = user;
+    }
 
-	public void setHotel(Hotel hotel) {
-		this.hotel = hotel;
-	}
+    public Room getRoom() {
+        return room;
+    }
 
-	public Stay getStay() {
-		return stay;
-	}
+    public void setRoom(Room room) {
+        this.room = room;
+    }
 
-	public void setStay(Stay stay) {
-		this.stay = stay;
-	}
+    public Hotel getHotel() {
+        return hotel;
+    }
 
-	public FeedbackType getType() {
-		return type;
-	}
+    public void setHotel(Hotel hotel) {
+        this.hotel = hotel;
+    }
 
-	public void setType(FeedbackType type) {
-		this.type = type;
-	}
+    public Stay getStay() {
+        return stay;
+    }
 
-	public String getMessage() {
-		return message;
-	}
+    public void setStay(Stay stay) {
+        this.stay = stay;
+    }
 
-	public void setMessage(String message) {
-		this.message = message;
-	}
+    public FeedbackType getType() {
+        return type;
+    }
 
-	public LocalDateTime getSubmissionDate() {
-		return submissionDate;
-	}
+    public void setType(FeedbackType type) {
+        this.type = type;
+    }
 
-	public void setSubmissionDate(LocalDateTime submissionDate) {
-		this.submissionDate = submissionDate;
-	}
+    public String getMessage() {
+        return message;
+    }
 
-	public FeedbackStatus getStatus() {
-		return status;
-	}
+    public void setMessage(String message) {
+        this.message = message;
+    }
 
-	public void setStatus(FeedbackStatus status) {
-		this.status = status;
-	}
+    public LocalDateTime getSubmissionDate() {
+        return submissionDate;
+    }
 
-	public String getAgentNotes() {
-		return agentNotes;
-	}
+    public void setSubmissionDate(LocalDateTime submissionDate) {
+        this.submissionDate = submissionDate;
+    }
 
-	public void setAgentNotes(String agentNotes) {
-		this.agentNotes = agentNotes;
-	}
+    // REMOVED: Getter and Setter for ScheduledTime
+    // public LocalDateTime getScheduledTime() {
+    //     return scheduledTime;
+    // }
+    // public void setScheduledTime(LocalDateTime scheduledTime) {
+    //     this.scheduledTime = scheduledTime;
+    // }
+
+    public FeedbackStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(FeedbackStatus status) {
+        this.status = status;
+    }
+
+    public String getAgentNotes() {
+        return agentNotes;
+    }
+
+    public void setAgentNotes(String agentNotes) {
+        this.agentNotes = agentNotes;
+    }
 }
-
-
-
-//package com.hotel.chatbox.domain;
-//
-//import jakarta.persistence.*;
-//import java.time.LocalDateTime; // Using LocalDateTime for date and time
-//
-//@Entity
-//@Table(name = "feedback")
-//public class Feedback {
-//    @Id
-//    @GeneratedValue(strategy = GenerationType.IDENTITY)
-//    private Long feedbackId;
-//
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "user_id", nullable = false)
-//    private User user;
-//
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "hotel_id", nullable = true) // Feedback can be general or for a specific hotel
-//    private Hotel hotel;
-//
-//    @Column(nullable = false)
-//    @Enumerated(EnumType.STRING)
-//    private FeedbackType type; // e.g., COMPLAINT, SUGGESTION, PRAISE
-//
-//    @Column(nullable = false, columnDefinition = "TEXT") // Use TEXT for potentially long messages
-//    private String message;
-//
-//    @Column(nullable = false)
-//    private LocalDateTime submissionDate;
-//
-//    @Column(nullable = false)
-//    @Enumerated(EnumType.STRING)
-//    private FeedbackStatus status; // e.g., NEW, IN_REVIEW, RESOLVED, ESCALATED
-//
-//    @Column(nullable = true)
-//    private String agentNotes; // Notes from the human agent
-//
-//    // Enum for feedback type
-//    public enum FeedbackType {
-//        COMPLAINT, SUGGESTION, PRAISE, GENERAL
-//    }
-//
-//    // Enum for feedback status
-//    public enum FeedbackStatus {
-//        NEW, IN_REVIEW, RESOLVED, ESCALATED
-//    }
-//
-//    // --- Constructors ---
-//    public Feedback() {
-//        this.submissionDate = LocalDateTime.now(); // Set submission date automatically
-//        this.status = FeedbackStatus.NEW; // Default status
-//    }
-//
-//    public Feedback(User user, Hotel hotel, FeedbackType type, String message) {
-//        this(); // Call default constructor to set date and status
-//        this.user = user;
-//        this.hotel = hotel;
-//        this.type = type;
-//        this.message = message;
-//    }
-//
-//    // --- Getters and Setters ---
-//    public Long getFeedbackId() {
-//        return feedbackId;
-//    }
-//
-//    public void setFeedbackId(Long feedbackId) {
-//        this.feedbackId = feedbackId;
-//    }
-//
-//    public User getUser() {
-//        return user;
-//    }
-//
-//    public void setUser(User user) {
-//        this.user = user;
-//    }
-//
-//    public Hotel getHotel() {
-//        return hotel;
-//    }
-//
-//    public void setHotel(Hotel hotel) {
-//        this.hotel = hotel;
-//    }
-//
-//    public FeedbackType getType() {
-//        return type;
-//    }
-//
-//    public void setType(FeedbackType type) {
-//        this.type = type;
-//    }
-//
-//    public String getMessage() {
-//        return message;
-//    }
-//
-//    public void setMessage(String message) {
-//        this.message = message;
-//    }
-//
-//    public LocalDateTime getSubmissionDate() {
-//        return submissionDate;
-//    }
-//
-//    public void setSubmissionDate(LocalDateTime submissionDate) {
-//        this.submissionDate = submissionDate;
-//    }
-//
-//    public FeedbackStatus getStatus() {
-//        return status;
-//    }
-//
-//    public void setStatus(FeedbackStatus status) {
-//        this.status = status;
-//    }
-//
-//    public String getAgentNotes() {
-//        return agentNotes;
-//    }
-//
-//    public void setAgentNotes(String agentNotes) {
-//        this.agentNotes = agentNotes;
-//    }
-//}
