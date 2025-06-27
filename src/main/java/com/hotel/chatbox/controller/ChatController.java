@@ -63,49 +63,49 @@ public class ChatController {
             parsedHotels = hotelParser.parse(rawAiResponse);
         }        
 
-        // --- Logic to trigger booking ---
-        BookingResponseParser parser = new BookingResponseParser();
-        
-        if (parser.canBeParsed(rawAiResponse)) {
-        	
-            BookingDetails details = parser.parseBookingConfirmation(rawAiResponse);
-            
-            
-            if (details != null) {
-//                System.out.println("RoomType: " + details.roomType());
-//                System.out.println("Hotel Name: " + details.hotelName());
-//                System.out.println("Guests Number: " + details.numberOfGuests());
-//                System.out.println("Check-in Date: " + details.checkInDate());
-//                System.out.println("Check-out Date: " + details.checkOutDate());
-                try {
-                    int numberOfRooms = 1; 
-
-                    Booking booked = bookingService.createBooking(
-                            username,
-                            details.hotelName(),
-                            details.roomType(),
-                            details.numberOfGuests(),
-                            details.checkInDate(),
-                            details.checkOutDate(),
-                            numberOfRooms
-                    );
-                    System.out.println("Booking successfully created with ID: " + booked.getBookingId());
-
-                    return Mono.just(new ChatResponse("Your reservation has been successfully made! Booking ID: " + booked.getBookingId(), null));
-
-                } catch (Exception e) {
-                    System.err.println("Error creating booking: " + e.getMessage());
-                    return Mono.just(new ChatResponse("I apologize, but I encountered an error trying to complete your reservation: " + e.getMessage(), parsedHotels));
-                }
-                
-            }
-	        } else {
-	            System.out.println("Cannot be parsed as a booking confirmation.");
-	        }
-        
-        
-
-        // --- End of booking logic ---
+//        // --- Logic to trigger booking ---
+//        BookingResponseParser parser = new BookingResponseParser();
+//        
+//        if (parser.canBeParsed(rawAiResponse)) {
+//        	
+//            BookingDetails details = parser.parseBookingConfirmation(rawAiResponse);
+//            
+//            
+//            if (details != null) {
+////                System.out.println("RoomType: " + details.roomType());
+////                System.out.println("Hotel Name: " + details.hotelName());
+////                System.out.println("Guests Number: " + details.numberOfGuests());
+////                System.out.println("Check-in Date: " + details.checkInDate());
+////                System.out.println("Check-out Date: " + details.checkOutDate());
+//                try {
+//                    int numberOfRooms = 1; 
+//
+//                    Booking booked = bookingService.createBooking(
+//                            username,
+//                            details.hotelName(),
+//                            details.roomType(),
+//                            details.numberOfGuests(),
+//                            details.checkInDate(),
+//                            details.checkOutDate(),
+//                            numberOfRooms
+//                    );
+//                    System.out.println("Booking successfully created with ID: " + booked.getBookingId());
+//
+//                    return Mono.just(new ChatResponse("Your reservation has been successfully made! Booking ID: " + booked.getBookingId(), null));
+//
+//                } catch (Exception e) {
+//                    System.err.println("Error creating booking: " + e.getMessage());
+//                    return Mono.just(new ChatResponse("I apologize, but I encountered an error trying to complete your reservation: " + e.getMessage(), parsedHotels));
+//                }
+//                
+//            }
+//	        } else {
+//	            System.out.println("Cannot be parsed as a booking confirmation.");
+//	        }
+//        
+//        
+//
+//        // --- End of booking logic ---
 
         // --- Return the combined response ---
         if (parsedHotels != null && !parsedHotels.isEmpty()) {

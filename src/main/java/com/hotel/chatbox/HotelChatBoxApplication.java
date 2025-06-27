@@ -88,11 +88,11 @@ public class HotelChatBoxApplication {
 //            System.out.println("Finished populating initial user data.");
 //        };
 //    }
-
-    /**
-     * CommandLineRunner to initialize data in the database and vector store.
-     * This will run once when the application starts.
-     */
+//
+//    /**
+//     * CommandLineRunner to initialize data in the database and vector store.
+//     * This will run once when the application starts.
+//     */
 //    @Bean
 //    @Order(2)
 //    public CommandLineRunner dataInitializer(
@@ -620,6 +620,15 @@ public class HotelChatBoxApplication {
 //        }
 //    }
 }
+
+
+
+
+
+
+
+
+
 
 //package com.hotel.chatbox;
 //
